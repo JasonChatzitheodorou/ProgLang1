@@ -83,7 +83,7 @@ fun parse file =
 
 fun powers2 str =
     let
-	val (T, N::K::ts) = parse str;
+	val (T, N::K::ts) = parse str; 
 
 	fun run 1 n k _ = solve_powers2 n k
 	  | run t n k (a::b::xs) = (solve_powers2 n k; run (t-1) a b xs)
@@ -103,9 +103,9 @@ fun do_coronograph N M l =
 	val parent = Array.array(N, ~1);
 	val adj = Array.array(N, []);
 
-	fun initialise arr v = modify (fn a => v) arr;
+	fun initialise arr v = Array.modify (fn a => v) arr;
 	
-	fun delete_edge u v =
+	fun remove_edge u v =
 	    let
 		val l_1 = List.filter (fn a => a <> v) (Array.sub(adj, u));
 		val l_2 = List.filter (fn a => a <> u) (Array.sub(adj, v));
@@ -121,7 +121,8 @@ fun do_coronograph N M l =
 		(Array.update(adj, u, v::l_1); Array.update(adj, v, u::l_2))
 	    end;
 
-	(*Adds all the given edges to adj*)
+	(*Takes list of nodes, splits them in two's starting from the head,*)
+	(*and adds all the given edges to adj*)
 	fun create_graph 0 _ = ()
 	  | create_graph i (u::v::ts) = (create_graph (i - 1) ts; add_edge u v)
 	  | create_graph i _ = ();
@@ -152,7 +153,7 @@ fun do_coronograph N M l =
 			    else if Array.sub(arrived, n) > Array.sub(arrived, h) andalso
 				    Array.sub(finished, h) = 0 andalso
 				    h <> Array.sub(parent, n) then (first := h; last := n)
-			else ();
+			else loop_neighbours ts;
 		    in
 			(t := !t + 1;
 			 Array.update(arrived, n, !t);
@@ -169,21 +170,80 @@ fun do_coronograph N M l =
 		else ()
 	    end;
 
-	fun find_cycle _ = ();
+	(*Initialises the 3 arrays and returns list of nodes in a cycle*)
+	fun find_cycle () =
+	    let
+		val first = ref ~1;
+		val last = ref ~1;
+		val time = ref 0;
+
+		fun list_cycle ~1 = []
+		  | list_cycle index =
+		    if index <> Array.sub(parent, !first) then index::(list_cycle (Array.sub(parent, index)))
+		    else [];
+	    in
+		(initialise arrived 0; initialise finished 0; initialise parent ~1;
+		 do_DFS 1 time first last; 
+		 list_cycle (!last))
+	    end;
+
+	fun solve () =
+	    let
+		val cycle = find_cycle ();
+
+		fun success l =
+		    let
+			fun remove_edges_of_cycle [] = ()
+			  | remove_edges_of_cycle [u] = () 
+			  | remove_edges_of_cycle (u::ts) = (remove_edge u (hd ts);
+								remove_edges_of_cycle ts)
+
+			fun print_list [] = ()
+			  | print_list [h] = print(Int.toString(h) ^ "\n") 
+			  | print_list (h::ts) = (print(Int.toString(h) ^ " "); print_list ts); 
+
+			(*Curried function that sorts a list*)
+			val sort_list = ListMergeSort.sort (fn(x, y) => x > y);
+		    in
+			(remove_edges_of_cycle l;
+			 initialise arrived 0;
+			 print("CORONA " ^ Int.toString(length l) ^ "\n");
+			 print_list (sort_list (map DFS_count l)))
+		    end;
+	    in
+		if null cycle then print("NO CORONA\n")
+		else (remove_edge (hd cycle) (List.last cycle);
+		      if null (find_cycle ()) then success cycle
+		      else print("NO CORONA\n"))
+	    end;
+		      
     in
-	(create_graph M l; delete_edge 1 2; DFS_count 4)
+	(create_graph M l; solve())
     end;
 
-fun test _ = do_coronograph 5 4 [1, 2, 2, 3, 1, 3, 5, 4];
-		
+(*Code for input from file was found at https://courses.softlab.ntua.gr/pl1/2013a/Exercises/countries.sml*)		
 fun coronograph str =
     let
-	fun loop_t 0 _ _ _ = ()
-	  | loop_t T N M l = ();
+	val inStream = TextIO.openIn str;
 
-	fun loop_m 0 _ _ _ = ()
-	  | loop_m M _ _ _  = (); 
+	fun readInt input = 
+	    Option.valOf (TextIO.scanStream (Int.scan StringCvt.DEC) input);
+
+	fun readInts 0 acc = rev acc
+	  | readInts i acc = readInts (i - 1) (readInt inStream :: acc);
+
+	val T = readInt inStream;
+	val _ = TextIO.inputLine inStream;
+	
+	fun loop_t 0 = ()
+	  | loop_t t =
+	    let
+		val (N::M::[]) = readInts 2 [];
+		val l = readInts (2 * M) [];
+	    in
+		(do_coronograph N M l; loop_t (t - 1))
+	    end;		 
     in
-	()
+	loop_t T
     end;
 	
